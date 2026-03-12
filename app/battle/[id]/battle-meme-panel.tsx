@@ -3,6 +3,12 @@
 import { getBlobUrl } from '@/lib/shelby-client'
 import VoteButton from '@/app/components/vote-button'
 
+const FALLBACK_MEMES = [
+  '/memes/doge.jpg', '/memes/pepe.jpg', '/memes/stonks.jpg', '/memes/notstonks.jpg',
+  '/memes/drake.jpg', '/memes/chad.jpg', '/memes/grumpy.jpg', '/memes/nyan.jpg',
+  '/memes/distracted.jpg', '/memes/fine.jpg', '/memes/spongebob.jpg', '/memes/crying.jpg',
+]
+
 interface MemePanelProps {
   side: 'meme_a' | 'meme_b'
   creator: string
@@ -75,6 +81,10 @@ export default function BattleMemePanel({
           src={getBlobUrl(creator, blobName)}
           alt={label}
           className="aspect-square w-full object-cover"
+          onError={(e) => {
+            const idx = (battleId * 2 + (isMemeA ? 0 : 1)) % FALLBACK_MEMES.length
+            ;(e.target as HTMLImageElement).src = FALLBACK_MEMES[idx]
+          }}
         />
         {isResolved && isWinner && (
           <div

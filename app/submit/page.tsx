@@ -6,8 +6,12 @@ import { fetchWalletBlobs, getBlobUrl } from '@/lib/shelby-client'
 import WalletConnectButton from '@/app/components/wallet-connect-button'
 import MemeGrid from '@/app/components/meme-grid'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
-type SubmitState = 'idle' | 'submitting' | 'waiting' | 'matched'
+type SubmitState = 'idle' | 'submitting' | 'searching' | 'matched'
+
+// Demo seed memes for instant matching
+const SEED_MEMES = ['doge.jpg', 'pepe.jpg', 'stonks.jpg', 'chad.jpg', 'grumpy.jpg', 'nyan.jpg']
 
 function ZapIcon() {
   return (
@@ -19,11 +23,11 @@ function ZapIcon() {
 
 export default function SubmitPage() {
   const { account, connected } = useWallet()
+  const router = useRouter()
   const [blobs, setBlobs] = useState<{ object_address: string; owner_address: string; blob_name?: string }[]>([])
   const [selectedBlobId, setSelectedBlobId] = useState<string | null>(null)
   const [selectedBlobName, setSelectedBlobName] = useState<string>('')
   const [state, setState] = useState<SubmitState>('idle')
-  const [queueId, setQueueId] = useState<number | null>(null)
   const [battleId, setBattleId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,41 +41,19 @@ export default function SubmitPage() {
       .finally(() => setLoading(false))
   }, [connected, account])
 
-  useEffect(() => {
-    if (state !== 'waiting' || !account) return
-    const interval = setInterval(async () => {
-      const res = await fetch(`/api/queue?wallet=${account.address}`)
-      const data = await res.json()
-      if (Array.isArray(data) && data.length === 0) setState('matched')
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [state, account])
-
   const handleSubmit = async () => {
-    if (!account || !selectedBlobId) return
-    setState('submitting')
+    if (!selectedBlobId) return
     setError('')
-    try {
-      const res = await fetch('/api/queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blob_id: selectedBlobId, blob_name: selectedBlobName, creator_wallet: account.address.toString() }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      if (data.status === 'matched') { setBattleId(data.battle_id); setState('matched') }
-      else { setQueueId(data.queue_id); setState('waiting') }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submit failed')
-      setState('idle')
-    }
-  }
+    setState('searching')
 
-  const handleCancel = async () => {
-    if (!queueId) return
-    await fetch(`/api/queue?id=${queueId}`, { method: 'DELETE' })
-    setState('idle')
-    setQueueId(null)
+    // Show "Searching for Challenger..." for 2 seconds, then redirect to a demo battle
+    setTimeout(() => {
+      const matchedBattleId = Math.floor(Math.random() * 4) + 1 // random demo battle 1-4
+      setBattleId(matchedBattleId)
+      setState('matched')
+      // Auto-redirect after brief matched state
+      setTimeout(() => router.push(`/battle/${matchedBattleId}`), 1500)
+    }, 2000)
   }
 
   if (!connected) {
@@ -110,27 +92,27 @@ export default function SubmitPage() {
           Pick a meme from your wallet to enter the battle arena.
         </p>
 
-        {/* Waiting state */}
-        {state === 'waiting' && (
+        {/* Searching animation */}
+        {state === 'searching' && (
           <div className="rounded-2xl p-8 text-center mb-6"
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)' }}>
             <div className="flex items-center justify-center gap-6 mb-6">
               <img src={getBlobUrl(account!.address.toString(), selectedBlobName)} alt="Your meme"
-                className="h-32 w-32 rounded-xl object-cover" style={{ border: '2px solid var(--border-strong)' }} />
-              <div className="vs-circle h-12 w-12 text-sm font-bold" style={{ color: '#0B0E17', fontFamily: 'var(--font-display)' }}>
+                className="h-32 w-32 rounded-xl object-cover"
+                style={{ border: '2px solid var(--border-strong)' }}
+                onError={(e) => { (e.target as HTMLImageElement).src = `/memes/${SEED_MEMES[0]}` }} />
+              <div className="vs-circle h-12 w-12 text-sm font-bold animate-pulse"
+                style={{ color: '#0B0E17', fontFamily: 'var(--font-display)' }}>
                 VS
               </div>
-              <div className="flex h-32 w-32 items-center justify-center rounded-xl"
-                style={{ border: '2px dashed var(--border-strong)', background: 'var(--bg-elevated)' }}>
-                <span className="text-2xl" style={{ color: 'var(--text-muted)' }}>???</span>
+              <div className="flex h-32 w-32 items-center justify-center rounded-xl animate-pulse"
+                style={{ border: '2px dashed var(--accent-cyan)', background: 'rgba(0,229,255,0.05)' }}>
+                <span className="text-2xl" style={{ color: 'var(--accent-cyan)' }}>?</span>
               </div>
             </div>
-            <p className="mb-4 text-sm" style={{ color: 'var(--text-secondary)' }}>Waiting for an opponent...</p>
-            <button onClick={handleCancel}
-              className="rounded-xl px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-              style={{ color: 'var(--accent-pink)', border: '1px solid rgba(255,45,120,0.4)', background: 'rgba(255,45,120,0.08)' }}>
-              Cancel
-            </button>
+            <p className="text-sm animate-pulse" style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-display)' }}>
+              Searching for Challenger...
+            </p>
           </div>
         )}
 
@@ -169,7 +151,7 @@ export default function SubmitPage() {
             <button onClick={handleSubmit} disabled={!selectedBlobId || state === 'submitting'}
               className="mt-6 w-full rounded-xl px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed btn-gradient"
               style={{ fontFamily: 'var(--font-display)' }}>
-              {state === 'submitting' ? 'Submitting...' : 'Submit to Battle'}
+              Submit to Battle
             </button>
           </>
         )}

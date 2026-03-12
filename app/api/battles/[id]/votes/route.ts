@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server-client'
+import { generateFakeVotes, isDemoMode } from '@/lib/mock-battles'
 
 // GET: Vote log for a battle (no side info for active battles)
 export async function GET(
@@ -8,6 +9,12 @@ export async function GET(
 ) {
   const { id } = await params
   const wallet = req.nextUrl.searchParams.get('wallet')
+
+  // Demo mode: return fake vote activity
+  if (isDemoMode()) {
+    if (wallet) return NextResponse.json({ voted: false, vote: null })
+    return NextResponse.json(generateFakeVotes(Number(id), 15))
+  }
 
   // If wallet param, check if this wallet has voted
   if (wallet) {

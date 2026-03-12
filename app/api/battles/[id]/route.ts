@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server-client'
+import { getDemoBattles, isDemoMode } from '@/lib/mock-battles'
 
 // GET: Single battle detail
 export async function GET(
@@ -7,6 +8,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+
+  // Demo mode: return mock battle by id
+  if (isDemoMode()) {
+    const battle = getDemoBattles().find((b) => b.id === Number(id))
+    if (!battle) {
+      return NextResponse.json({ error: 'Battle not found' }, { status: 404 })
+    }
+    if (battle.status !== 'resolved') {
+      const { votes_a, votes_b, winner, ...rest } = battle
+      return NextResponse.json(rest)
+    }
+    return NextResponse.json(battle)
+  }
 
   const { data, error } = await supabaseAdmin
     .from('battles')

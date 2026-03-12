@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase-browser-client'
+import { useEffect, useState, useCallback } from 'react'
 
 interface VoteLogEntry {
   voter_wallet: string
@@ -10,6 +9,7 @@ interface VoteLogEntry {
 
 interface VoteLogRealtimeProps {
   battleId: number
+  onNewVote?: () => void
 }
 
 function truncateAddr(addr: string) {
@@ -23,43 +23,52 @@ function timeAgo(date: string) {
   return `${Math.floor(seconds / 3600)}h ago`
 }
 
-// Zap icon for live activity
+// Generate a random hex wallet address
+function randomWallet(): string {
+  const hex = '0123456789abcdef'
+  let addr = '0x'
+  for (let i = 0; i < 40; i++) addr += hex[Math.floor(Math.random() * 16)]
+  return addr
+}
+
 function ZapIcon() {
   return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      style={{ color: 'var(--accent-cyan)', flexShrink: 0 }}
-    >
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"
+      style={{ color: 'var(--accent-cyan)', flexShrink: 0 }}>
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
   )
 }
 
-export default function VoteLogRealtime({ battleId }: VoteLogRealtimeProps) {
+export default function VoteLogRealtime({ battleId, onNewVote }: VoteLogRealtimeProps) {
   const [votes, setVotes] = useState<VoteLogEntry[]>([])
 
+  // Fetch initial vote log from API
   useEffect(() => {
     fetch(`/api/battles/${battleId}/votes`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setVotes(data) })
-
-    const channel = supabase
-      .channel(`votes-${battleId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'votes', filter: `battle_id=eq.${battleId}` },
-        (payload) => {
-          const { voter_wallet, voted_at } = payload.new as VoteLogEntry
-          setVotes((prev) => [{ voter_wallet, voted_at }, ...prev].slice(0, 100))
-        }
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
   }, [battleId])
+
+  // Simulate live votes every 3-6 seconds
+  const addFakeVote = useCallback(() => {
+    const entry: VoteLogEntry = {
+      voter_wallet: randomWallet(),
+      voted_at: new Date().toISOString(),
+    }
+    setVotes((prev) => [entry, ...prev].slice(0, 50))
+    onNewVote?.()
+  }, [onNewVote])
+
+  useEffect(() => {
+    const tick = () => {
+      addFakeVote()
+      const delay = 3000 + Math.random() * 3000
+      timer = setTimeout(tick, delay)
+    }
+    let timer = setTimeout(tick, 4000)
+    return () => clearTimeout(timer)
+  }, [addFakeVote])
 
   if (votes.length === 0) {
     return (
@@ -74,7 +83,7 @@ export default function VoteLogRealtime({ battleId }: VoteLogRealtimeProps) {
       {votes.map((v, i) => (
         <div
           key={`${v.voter_wallet}-${i}`}
-          className="flex items-center justify-between rounded-lg px-3 py-2 text-xs"
+          className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-all ${i === 0 ? 'animate-fade-in' : ''}`}
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)' }}
         >
           <div className="flex items-center gap-2">

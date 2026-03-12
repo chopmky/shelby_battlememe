@@ -4,6 +4,14 @@ import Link from 'next/link'
 import { getBlobUrl } from '@/lib/shelby-client'
 import CountdownTimer from './countdown-timer'
 
+// Local meme fallbacks when Shelby blob images fail to load
+const FALLBACK_MEMES = [
+  '/memes/doge.jpg', '/memes/pepe.jpg', '/memes/stonks.jpg', '/memes/notstonks.jpg',
+  '/memes/drake.jpg', '/memes/chad.jpg', '/memes/grumpy.jpg', '/memes/nyan.jpg',
+  '/memes/distracted.jpg', '/memes/fine.jpg', '/memes/spongebob.jpg', '/memes/crying.jpg',
+]
+const getFallback = (id: number, side: 'a' | 'b') => FALLBACK_MEMES[((id * 2) + (side === 'b' ? 1 : 0)) % FALLBACK_MEMES.length]
+
 interface Battle {
   id: number
   meme_a_blob_name: string
@@ -35,7 +43,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export default function BattleCard({ battle }: { battle: Battle }) {
+export default function BattleCard({ battle, isHot }: { battle: Battle; isHot?: boolean }) {
   const endTime = new Date(new Date(battle.matched_at).getTime() + battle.duration * 1000).toISOString()
 
   return (
@@ -44,14 +52,23 @@ export default function BattleCard({ battle }: { battle: Battle }) {
       className="block rounded-xl p-4 transition-all hover:scale-[1.01]"
       style={{
         background: 'var(--bg-card)',
-        border: '1px solid var(--border-default)',
+        border: isHot ? '1px solid rgba(0,229,255,0.6)' : '1px solid var(--border-default)',
+        boxShadow: isHot ? '0 0 20px rgba(0,229,255,0.3), 0 0 40px rgba(0,229,255,0.1)' : 'none',
       }}
     >
       {/* Card header */}
       <div className="flex items-center justify-between mb-3">
-        <span className="font-semibold text-sm" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
-          BattleMEME #{battle.id}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
+            BattleMEME #{battle.id}
+          </span>
+          {isHot && (
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide animate-pulse"
+              style={{ background: 'rgba(255,165,0,0.2)', color: '#FFA500', border: '1px solid rgba(255,165,0,0.5)', fontFamily: 'var(--font-display)' }}>
+              HOT
+            </span>
+          )}
+        </div>
         <StatusBadge status={battle.status} />
       </div>
 
@@ -63,6 +80,7 @@ export default function BattleCard({ battle }: { battle: Battle }) {
             alt="Meme A"
             className="aspect-square w-full rounded-lg object-cover"
             style={{ border: '1px solid var(--border-default)' }}
+            onError={(e) => { (e.target as HTMLImageElement).src = getFallback(battle.id, 'a') }}
           />
           <p className="mt-1 text-xs truncate text-center" style={{ color: 'var(--text-secondary)' }}>
             {battle.meme_a_creator.slice(0, 8)}...
@@ -83,6 +101,7 @@ export default function BattleCard({ battle }: { battle: Battle }) {
             alt="Meme B"
             className="aspect-square w-full rounded-lg object-cover"
             style={{ border: '1px solid var(--border-default)' }}
+            onError={(e) => { (e.target as HTMLImageElement).src = getFallback(battle.id, 'b') }}
           />
           <p className="mt-1 text-xs truncate text-center" style={{ color: 'var(--text-secondary)' }}>
             {battle.meme_b_creator.slice(0, 8)}...

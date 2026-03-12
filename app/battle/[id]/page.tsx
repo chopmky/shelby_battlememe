@@ -56,11 +56,17 @@ export default function BattleDetailPage() {
   const [hasVoted, setHasVoted] = useState(false)
   const [votedSide, setVotedSide] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [livePool, setLivePool] = useState(0)
+  const [liveVoters, setLiveVoters] = useState(0)
 
   useEffect(() => {
     fetch(`/api/battles/${battleId}`)
       .then((r) => r.json())
-      .then(setBattle)
+      .then((data) => {
+        setBattle(data)
+        setLivePool(data.pool || 0)
+        setLiveVoters(data.total_voters || 0)
+      })
       .finally(() => setLoading(false))
   }, [battleId])
 
@@ -165,8 +171,8 @@ export default function BattleDetailPage() {
 
         {/* Stats cards */}
         <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
-          <StatCard label="Total Pool" value={`${battle.pool} ShelbyUSD`} />
-          <StatCard label="Total Voters" value={battle.total_voters} />
+          <StatCard label="Total Pool" value={`${livePool.toFixed(1)} ShelbyUSD`} />
+          <StatCard label="Total Voters" value={liveVoters} />
           <StatCard label="Vote Cost" value="0.1 ShelbyUSD" />
           <StatCard label="Winner Prize" value={isResolved ? `${winnerPrizePct.toFixed(2)}` : '???'} />
         </div>
@@ -207,7 +213,10 @@ export default function BattleDetailPage() {
           <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}>
             Live Vote Activity
           </h3>
-          <VoteLogRealtime battleId={battle.id} />
+          <VoteLogRealtime battleId={battle.id} onNewVote={() => {
+            setLivePool((p) => +(p + 0.1).toFixed(1))
+            setLiveVoters((v) => v + 1)
+          }} />
         </div>
       </main>
     </div>

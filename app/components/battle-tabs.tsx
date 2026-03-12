@@ -8,7 +8,6 @@ interface BattleTabsProps {
 
 const TABS = [
   { id: 'active', label: 'Active' },
-  { id: 'waiting', label: 'Waiting' },
   { id: 'resolved', label: 'Ended' },
   { id: 'my', label: 'My Battles' },
 ]

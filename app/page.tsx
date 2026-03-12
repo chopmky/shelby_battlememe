@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useWallet } from '@aptos-labs/wallet-adapter-react'
 import WalletConnectButton from '@/app/components/wallet-connect-button'
 import BattleCard from '@/app/components/battle-card'
@@ -27,7 +27,36 @@ interface Stats {
   battlingMemes: number
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+// Count-up animation hook
+function useCountUp(target: number, duration = 1500): number {
+  const [value, setValue] = useState(0)
+  const startTime = useRef<number | null>(null)
+  const prevTarget = useRef(0)
+
+  useEffect(() => {
+    if (target === 0) return
+    const from = prevTarget.current
+    prevTarget.current = target
+    startTime.current = Date.now()
+
+    const tick = () => {
+      const elapsed = Date.now() - (startTime.current ?? Date.now())
+      const progress = Math.min(elapsed / duration, 1)
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(from + (target - from) * eased))
+      if (progress < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [target, duration])
+
+  return value
+}
+
+function AnimatedStatCard({ label, value, suffix }: { label: string; value: number; suffix?: string }) {
+  const animated = useCountUp(value)
+  const display = suffix ? `${animated.toLocaleString()}${suffix}` : animated.toLocaleString()
+
   return (
     <div
       className="rounded-xl p-4 flex-1 min-w-0"
@@ -37,7 +66,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
         {label}
       </p>
       <p className="text-lg font-bold truncate" style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-display)' }}>
-        {value}
+        {display}
       </p>
     </div>
   )
@@ -57,6 +86,7 @@ export default function HomePage() {
   const [tab, setTab] = useState('active')
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<Stats>({ totalPool: 0, activeBattles: 0, totalVotes: 0, battlingMemes: 0 })
+  const [hotBattleId, setHotBattleId] = useState<number | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -75,7 +105,6 @@ export default function HomePage() {
       .then((data) => {
         const list: Battle[] = Array.isArray(data) ? data : []
         setBattles(list)
-        // Derive stats from battle list
         const active = list.filter((b) => b.status === 'active')
         setStats({
           totalPool: list.reduce((s, b) => s + (b.pool || 0), 0),
@@ -83,6 +112,13 @@ export default function HomePage() {
           totalVotes: list.reduce((s, b) => s + (b.total_voters || 0), 0),
           battlingMemes: active.length * 2,
         })
+        // Find the hottest battle (most voters among active)
+        if (active.length > 0) {
+          const hot = active.reduce((max, b) => (b.total_voters > max.total_voters ? b : max))
+          setHotBattleId(hot.id)
+        } else {
+          setHotBattleId(null)
+        }
       })
       .finally(() => setLoading(false))
   }, [tab, account])
@@ -107,12 +143,12 @@ export default function HomePage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
-        {/* Stats row */}
+        {/* Stats row with count-up animation */}
         <div className="flex gap-3 mb-8 overflow-x-auto pb-1">
-          <StatCard label="Total Pool" value={`${stats.totalPool.toFixed(2)} ShelbyUSD`} />
-          <StatCard label="Active Battles" value={stats.activeBattles} />
-          <StatCard label="Total Votes" value={stats.totalVotes} />
-          <StatCard label="Battling Memes" value={stats.battlingMemes} />
+          <AnimatedStatCard label="Total Pool" value={Math.round(stats.totalPool)} suffix=" ShelbyUSD" />
+          <AnimatedStatCard label="Active Battles" value={stats.activeBattles} />
+          <AnimatedStatCard label="Total Votes" value={stats.totalVotes} />
+          <AnimatedStatCard label="Battling Memes" value={stats.battlingMemes} />
         </div>
 
         {/* Tabs + section label */}
@@ -145,7 +181,7 @@ export default function HomePage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {battles.map((battle) => (
-              <BattleCard key={battle.id} battle={battle} />
+              <BattleCard key={battle.id} battle={battle} isHot={battle.id === hotBattleId} />
             ))}
           </div>
         )}

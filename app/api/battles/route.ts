@@ -1,10 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-server-client'
+import { getDemoBattles, isDemoMode } from '@/lib/mock-battles'
 
 // GET: List battles with optional filters
 export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get('status') || 'active'
   const wallet = req.nextUrl.searchParams.get('wallet')
+
+  // Demo mode: return mock data when Supabase is not configured
+  if (isDemoMode()) {
+    let filtered = getDemoBattles()
+    if (status === 'active') {
+      filtered = getDemoBattles().filter((b) => b.status === 'active' || b.status === 'draw_extended')
+    } else if (status !== 'all') {
+      filtered = getDemoBattles().filter((b) => b.status === status)
+    }
+    const sanitized = filtered.map((b) => {
+      if (b.status !== 'resolved') {
+        const { votes_a, votes_b, winner, ...rest } = b
+        return rest
+      }
+      return b
+    })
+    return NextResponse.json(sanitized)
+  }
 
   let query = supabaseAdmin
     .from('battles')
